@@ -1,0 +1,167 @@
+<html>
+  <head>
+    <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+    <script type="text/javascript">
+      // replace CLIENT_ID with your own
+      // more information on Google Drive SDK and API: https://developers.google.com/drive/web/
+      var CLIENT_ID = '768257703475-ek6cbhtkb9ut17oolsrboidkiecsvad9.apps.googleusercontent.com';
+      var SCOPES = 'https://www.googleapis.com/auth/drive';
+
+      /**
+       * Called when the client library is loaded to start the auth flow.
+       */
+      function handleClientLoad() {
+        window.setTimeout(checkAuth, 1);
+      }
+
+      /**
+       * Check if the current user has authorized the application.
+       */
+      function checkAuth() {
+        gapi.auth.authorize(
+            {'client_id': CLIENT_ID, 'scope': SCOPES, 'immediate': true},
+            handleAuthResult);
+      }
+
+      /**
+       * Called when authorization server replies.
+       *
+       * @param {Object} authResult Authorization result.
+       */
+      function handleAuthResult(authResult) {
+        var authButton = document.getElementById('authorizeButton');
+        authButton.style.display = 'none';
+        if (authResult && !authResult.error) {
+          // Access token has been successfully retrieved, requests can be sent to the API.
+          // callback to start the file retrieval and deletion process
+          gapi.client.load('drive', 'v2', retrieveAllFiles);
+        } else {
+          // No access token could be retrieved, show the button to start the authorization flow.
+          authButton.style.display = 'block';
+          authButton.onclick = function() {
+              gapi.auth.authorize(
+                  {'client_id': CLIENT_ID, 'scope': SCOPES, 'immediate': false},
+                  handleAuthResult);
+          };
+        }
+      }
+
+      /**
+        * Retrieve a list of File resources.
+        *
+        * @param {Function} callback Function to call when the request is complete.
+        */
+      function retrieveAllFiles(callback) {
+        window.filesToDelete = [];
+        window.deletedFiles = [];
+        window.filesRemaining = [];
+        window.i = 0;
+        
+        var retrievePageOfFiles = function(request, result) {
+          request.execute(function(resp) {
+          // Our current 1000 results
+            result = result.concat(resp.items);
+            
+          // Filter the current results
+            for(var i = 0; i < result.length; i++) {
+            // Double check that this file has been trashed and then that it's not a Google Doc
+              if (result[i].labels.trashed && result[i].mimeType.length > 0 && result[i].mimeType.search('google') === -1) {                          
+                // add to list of files for deleting
+                filesToDelete.push(result[i]);
+              }
+              // add to the list of files that will remain
+              else filesRemaining.push(result[i]);
+            }
+            
+          // Delete if any to delete
+            if (filesToDelete.length > window.i) {
+              batchFileDelete();
+            }
+            
+          // Get the next 1000 results
+            var nextPageToken = resp.nextPageToken;
+            if (nextPageToken) {
+            // Only retrieve files that are trashed
+              request = gapi.client.drive.files.list({
+                'pageToken': nextPageToken,
+                maxResults: 1000,
+                q: "trashed=true"
+              });
+              
+              retrievePageOfFiles(request, result);
+            } else {
+              // all done
+            }
+          });
+        }
+        // Only retrieve files that are trashed
+        var initialRequest = gapi.client.drive.files.list({
+          maxResults: 1000,
+          q: "trashed=true"
+        });
+        retrievePageOfFiles(initialRequest, []);
+      }
+      
+      /**
+        * Permanently delete a file, skipping the trash.
+        *
+        * @param {String} fileId ID of the file to delete.
+        */
+      function deleteFile(fileId) {
+        var request = gapi.client.drive.files.delete({
+          'fileId': fileId
+        });
+        request.execute(function(resp) { });
+      }
+      
+      function batchFileDelete() {
+        setTimeout(function () {
+        // delete 3 at time to stay within our rate limit
+          for(var x = 0+i; x < 3+i; x++) {
+            // store
+            deletedFiles.push(filesToDelete[x]);
+            
+            // delete it
+            deleteFile(filesToDelete[x].id);
+          }
+          
+        // increment
+          i+= 3;
+          
+        // Set another timeout
+          if (filesToDelete.length > window.i) {
+            batchFileDelete();
+          }
+        }, 1000);
+      }
+      
+    </script>
+    <script type="text/javascript" src="https://apis.google.com/js/client.js?onload=handleClientLoad"></script>
+  </head>
+  <body>
+    <!-- terms of service borrowed from https://www.reinvigorate.net/legal/ -->
+    <pre>Terms of Service
+
+Curiouser creative studio reserves the right at any time and from time to time to modify or discontinue, temporarily or permanently, the Service (or any part thereof) with or without notice. You agree that Curiouser creative studio shall not be liable to you or to any third party for any modification, suspension or discontinuance of the Service.
+Indemnity
+
+You agree to indemnify and hold Curiouser creative studio, and its subsidiaries, affiliates, officers, agents, partners, and employees, harmless from any claim or demand, including reasonable attorneys' fees, made by any third party due to or arising out of Content you submit, post, transmit or make available through the Service, your use of the Service, your connection to the Service, your violation of the TOS, or your violation of any rights of another.
+Termination
+
+You agree that Curiouser creative studio, in its sole discretion, may terminate your account(s) (or any part thereof) or use of the Service, and remove and discard any Content within the Service, for any reason, including, without limitation, for lack of use or if Curiouser creative studio believes that you have violated or acted inconsistently with the letter or spirit of the TOS. Curiouser creative studio may also in its sole discretion and at any time discontinue providing the Service, or any part thereof, with or without notice. You agree that any termination of your access to the Service under any provision of this TOS may be effected without prior notice, and acknowledge and agree that Curiouser creative studio may immediately deactivate or delete your account and all related information and files in your account and/or bar any further access to such files or the Service. Further, you agree that Curiouser creative studio shall not be liable to you or any third-party for any termination of your access to the Service.
+Disclaimer of Warranties
+
+YOU EXPRESSLY UNDERSTAND AND AGREE THAT:
+a. YOUR USE OF THE SERVICE IS AT YOUR SOLE RISK. THE SERVICE IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS. CURIOUSER CREATIVE STUDIO EXPRESSLY DISCLAIMS ALL WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+b. CURIOUSER CREATIVE STUDIO MAKES NO WARRANTY THAT (i) THE SERVICE WILL MEET YOUR REQUIREMENTS, (ii) THE SERVICE WILL BE UNINTERRUPTED, TIMELY, SECURE, OR ERROR-FREE, (iii) THE RESULTS THAT MAY BE OBTAINED FROM THE USE OF THE SERVICE WILL BE ACCURATE OR RELIABLE, (iv) THE QUALITY OF ANY PRODUCTS, SERVICES, INFORMATION, OR OTHER MATERIAL PURCHASED OR OBTAINED BY YOU THROUGH THE SERVICE WILL MEET YOUR EXPECTATIONS, AND (V) ANY ERRORS IN THE SOFTWARE WILL BE CORRECTED.
+c. ANY MATERIAL DOWNLOADED OR OTHERWISE OBTAINED THROUGH THE USE OF THE SERVICE IS DONE AT YOUR OWN DISCRETION AND RISK AND THAT YOU WILL BE SOLELY RESPONSIBLE FOR ANY DAMAGE TO YOUR COMPUTER SYSTEM OR LOSS OF DATA THAT RESULTS FROM THE DOWNLOAD OF ANY SUCH MATERIAL.
+d. NO ADVICE OR INFORMATION, WHETHER ORAL OR WRITTEN, OBTAINED BY YOU FROM CURIOUSER CREATIVE STUDIO OR THROUGH OR FROM THE SERVICE SHALL CREATE ANY WARRANTY NOT EXPRESSLY STATED IN THE TOS.
+Limitation of Liability
+
+YOU EXPRESSLY UNDERSTAND AND AGREE THAT CURIOUSER CREATIVE STUDIO SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR EXEMPLARY DAMAGES, INCLUDING BUT NOT LIMITED TO, DAMAGES FOR LOSS OF PROFITS, GOODWILL, USE, DATA OR OTHER INTANGIBLE LOSSES (EVEN IF CURIOUSER CREATIVE STUDIO HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES), RESULTING FROM: (i) THE USE OR THE INABILITY TO USE THE SERVICE; (ii) THE COST OF PROCUREMENT OF SUBSTITUTE GOODS AND SERVICES RESULTING FROM ANY GOODS, DATA, INFORMATION OR SERVICES PURCHASED OR OBTAINED OR MESSAGES RECEIVED OR TRANSACTIONS ENTERED INTO THROUGH OR FROM THE SERVICE; (iii) UNAUTHORIZED ACCESS TO OR ALTERATION OF YOUR TRANSMISSIONS OR DATA; (iv) STATEMENTS OR CONDUCT OF ANY THIRD PARTY ON THE SERVICE; OR (v) ANY OTHER MATTER RELATING TO THE SERVICE.
+Change of Policy
+
+YOU UNDERSTAND THAT THIS TERMS OF USE AGREEMENT OR THE PRIVACY POLICY MAY BE CHANGED AT ANY TIME WITH OR WITHOUT NOTICE.</pre>
+    <input type="button" id="authorizeButton" style="display: none" value="Authorize emptying Google Drive trash except for Google Docs and folders" />
+  </body>
+</html>
